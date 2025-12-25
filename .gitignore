@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Build
+build/
+dist/
+*.spec
+
+# Temp directories created by the tool
+temp_split/
+temp_bg/
+temp_trim/
+output_final/
+output_remover_test/
+output_v2/
+input_remover/
+output_remover/
+
+# User Input (optional, but good practice to ignore local test data)
+input/
+
+# VS Code
+.vscode/
+
+# System
+Thumbs.db
+Desktop.ini

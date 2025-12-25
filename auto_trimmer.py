@@ -58,6 +58,25 @@ def auto_trim(file_path, output_dir, padding=10):
     else:
         print(f"Failed to save {output_path}")
 
+def process_auto_trimmer(input_dir, output_dir, padding=10):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    exts = ('.png', '.jpg', '.jpeg')
+    files = [f for f in os.listdir(input_dir) if f.lower().endswith(exts)]
+    
+    if not files:
+        print(f"No images found in '{input_dir}'.")
+        return
+
+    print(f"Processing {len(files)} images with padding {padding}...")
+    
+    for f in files:
+        file_path = os.path.join(input_dir, f)
+        auto_trim(file_path, output_dir, padding)
+        
+    print("Done!")
+
 def main():
     parser = argparse.ArgumentParser(description="Auto Trimmer (Crop Transparent Area)")
     parser.add_argument("--input", default="input_trim", help="Input directory")
@@ -70,23 +89,7 @@ def main():
         print(f"Error: '{args.input}' directory not found.")
         return
 
-    if not os.path.exists(args.output):
-        os.makedirs(args.output)
-
-    exts = ('.png', '.jpg', '.jpeg')
-    files = [f for f in os.listdir(args.input) if f.lower().endswith(exts)]
-    
-    if not files:
-        print(f"No images found in '{args.input}'.")
-        return
-
-    print(f"Processing {len(files)} images with padding {args.padding}...")
-    
-    for f in files:
-        file_path = os.path.join(args.input, f)
-        auto_trim(file_path, args.output, args.padding)
-        
-    print("Done!")
+    process_auto_trimmer(args.input, args.output, args.padding)
 
 if __name__ == "__main__":
     main()

@@ -1,111 +1,150 @@
+import cv2
+import numpy as np
 import os
-import sys
 import argparse
-from PIL import Image, ImageDraw
 from collections import Counter
 
-def detect_bg_color(img, tolerance=30):
+def detect_bg_color_cv(img):
     """
-    Detects the background color by analyzing the 4 corners.
-    Returns the most common color among the corners.
+    Detects background color from 4 corners using OpenCV.
+    Returns BGR numpy array.
     """
-    width, height = img.size
+    height, width = img.shape[:2]
     corners = [
-        (0, 0),
-        (width - 1, 0),
-        (0, height - 1),
-        (width - 1, height - 1)
+        img[0, 0],
+        img[0, width-1],
+        img[height-1, 0],
+        img[height-1, width-1]
     ]
     
-    colors = []
-    for x, y in corners:
-        colors.append(img.getpixel((x, y)))
+    # Filter out alpha if present (though we usually use BGR for detection)
+    corners_bgr = [c[:3] for c in corners]
     
-    # Find the most common color
-    # Note: With tolerance, this is tricky. 
-    # For now, we assume the corners are exactly the same or very close.
-    # If they vary slightly (noise), Counter might see them as different.
-    # A simple approach: Just take the top-left as reference, 
-    # but check if others are similar.
-    
-    # Let's count exact matches first
-    most_common = Counter(colors).most_common(1)[0][0]
-    return most_common
+    # Convert to tuple for Counter
+    corners_tuple = [tuple(c) for c in corners_bgr]
+    most_common = Counter(corners_tuple).most_common(1)[0][0]
+    return np.array(most_common, dtype=np.uint8)
 
-def is_color_similar(c1, c2, tolerance):
-    """
-    Checks if two colors are similar within tolerance.
-    """
-    # Handle RGBA vs RGB
-    c1 = c1[:3]
-    c2 = c2[:3]
-    
-    dist_sq = sum((a - b) ** 2 for a, b in zip(c1, c2))
-    return dist_sq <= (tolerance * tolerance * 3)
-
-def process_flood_fill(img, tolerance=30):
-    """
-    Removes background using flood fill starting from corners.
-    Smartly checks all 4 corners.
-    """
-    img = img.convert("RGBA")
-    width, height = img.size
-    
-    # Detect dominant background color from corners
-    bg_ref = detect_bg_color(img)
-    
-    corners = [
-        (0, 0),
-        (width - 1, 0),
-        (0, height - 1),
-        (width - 1, height - 1)
-    ]
-    
-    # Flood fill from any corner that matches the reference background color
-    for corner in corners:
-        pixel_color = img.getpixel(corner)
-        if is_color_similar(pixel_color, bg_ref, tolerance):
-            try:
-                ImageDraw.floodfill(img, xy=corner, value=(0, 0, 0, 0), thresh=tolerance)
-            except Exception:
-                pass
-                
-    return img
-
-def process_auto_color_key(img, tolerance=30):
-    """
-    Detects background color from corners and removes it GLOBALLY.
-    (Good for removing 'donut holes' but risky for inner details).
-    """
-    img = img.convert("RGBA")
-    
-    # Detect background color
-    bg_ref = detect_bg_color(img)
-    print(f"  Detected background color: {bg_ref}")
-    
-    datas = img.getdata()
-    new_data = []
-    
-    tr, tg, tb = bg_ref[:3]
-    tol_sq = tolerance * tolerance * 3
-    
-    for item in datas:
-        r, g, b = item[0], item[1], item[2]
-        dist_sq = (r - tr)**2 + (g - tg)**2 + (b - tb)**2
+def process_remover(input_dir, output_dir, mode="flood", tolerance=30, color="255,255,255", erosion=0):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
         
-        if dist_sq <= tol_sq:
-            new_data.append((255, 255, 255, 0))
-        else:
-            new_data.append(item)
+    # Parse manual target color
+    target_bgr = None
+    if mode == "color":
+        try:
+            rgb = list(map(int, color.split(',')))
+            target_bgr = np.array(rgb[::-1], dtype=np.uint8) # RGB to BGR
+        except:
+            print("Error: Invalid color format. Use R,G,B")
+            return
+
+    exts = ('.png', '.jpg', '.jpeg')
+    files = [f for f in os.listdir(input_dir) if f.lower().endswith(exts)]
+    
+    if not files:
+        print(f"No images found in '{input_dir}'.")
+        return
+        
+    print(f"Processing {len(files)} images. Mode: {mode}, Tolerance: {tolerance}, Erosion: {erosion}")
+    
+    for f in files:
+        file_path = os.path.join(input_dir, f)
+        try:
+            # Read image
+            img = cv2.imdecode(np.fromfile(file_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+            if img is None: continue
+
+            # Ensure 4 channels (BGRA)
+            if img.shape[2] == 3:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
             
-    img.putdata(new_data)
-    return img
+            # Determine background color
+            if mode == "color":
+                bg_color = target_bgr
+            else:
+                bg_color = detect_bg_color_cv(img)
+
+            # Create Mask
+            # 1. Color Key / Auto Color (Global)
+            bg_color_int = bg_color.astype(np.int16)
+            lower = np.clip(bg_color_int - tolerance, 0, 255).astype(np.uint8)
+            upper = np.clip(bg_color_int + tolerance, 0, 255).astype(np.uint8)
+            
+            img_bgr = img[:, :, :3]
+            mask = cv2.inRange(img_bgr, lower, upper)
+            
+            # 2. Flood Fill (Connected components from corners)
+            if mode == "flood":
+                # Create a mask for floodFill (h+2, w+2)
+                h, w = img.shape[:2]
+                flood_mask = np.zeros((h+2, w+2), np.uint8)
+                
+                # Flood fill from corners on the MASK itself? 
+                # No, floodFill works on the image. 
+                # Strategy: Flood fill the original image's background to a specific key color, 
+                # or create a mask where flood filled areas are marked.
+                
+                # Better approach for "Flood" mode in OpenCV:
+                # Use the mask we generated (which has ALL pixels of that color).
+                # Then find connected components connected to the corners.
+                
+                # Find connected components on the mask
+                num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=4)
+                
+                # Check corners of the labels
+                corner_labels = set()
+                corner_labels.add(labels[0, 0])
+                corner_labels.add(labels[0, w-1])
+                corner_labels.add(labels[h-1, 0])
+                corner_labels.add(labels[h-1, w-1])
+                
+                # Create new mask only for these labels
+                final_mask = np.zeros_like(mask)
+                for label in corner_labels:
+                    if label == 0: continue # Label 0 is usually background (black in mask), but here mask is 255 for BG color.
+                    # Wait, inRange returns 255 for match. So background is white (255).
+                    # connectedComponents treats 0 as background.
+                    # So we want components that are 255.
+                    final_mask[labels == label] = 255
+                
+                mask = final_mask
+
+            # Erosion (Fringe Removal)
+            # Dilate the BACKGROUND mask = Erode the FOREGROUND
+            if erosion > 0:
+                kernel = np.ones((3, 3), np.uint8)
+                mask = cv2.dilate(mask, kernel, iterations=erosion)
+
+            # Apply Alpha
+            alpha = cv2.bitwise_not(mask)
+            
+            # Combine
+            b, g, r, a = cv2.split(img)
+            final_alpha = cv2.bitwise_and(a, alpha)
+            final_img = cv2.merge([b, g, r, final_alpha])
+            
+            output_filename = os.path.splitext(f)[0] + "_processed.png"
+            output_path = os.path.join(output_dir, output_filename)
+            
+            is_success, im_buf = cv2.imencode(".png", final_img)
+            if is_success:
+                im_buf.tofile(output_path)
+                print(f"Saved: {output_path}")
+            
+        except Exception as e:
+            print(f"Failed to process {f}: {e}")
+            import traceback
+            traceback.print_exc()
+            
+    print("Done!")
 
 def main():
-    parser = argparse.ArgumentParser(description="Background Removal Tool")
+    parser = argparse.ArgumentParser(description="Background Removal Tool (OpenCV)")
     parser.add_argument("--mode", choices=["flood", "color", "auto_color"], default="flood", 
-                        help="Mode: 'flood' (connected from corners), 'color' (manual specific color), 'auto_color' (detect color from corners and remove globally)")
+                        help="Mode: 'flood' (connected), 'color' (manual), 'auto_color' (global)")
     parser.add_argument("--tolerance", type=int, default=30, help="Tolerance (0-255)")
+    parser.add_argument("--erosion", type=int, default=0, help="Erosion/Fringe Removal (0-10)")
     parser.add_argument("--color", type=str, default="255,255,255", help="Target RGB for 'color' mode")
     parser.add_argument("--input", default="input_remover", help="Input directory")
     parser.add_argument("--output", default="output_remover", help="Output directory")
@@ -116,70 +155,7 @@ def main():
         print(f"Error: Input directory '{args.input}' not found.")
         return
         
-    if not os.path.exists(args.output):
-        os.makedirs(args.output)
-        
-    # Parse manual target color if needed
-    target_color = (255, 255, 255)
-    if args.mode == "color":
-        try:
-            target_color = tuple(map(int, args.color.split(',')))
-        except:
-            print("Error: Invalid color format.")
-            return
-
-    exts = ('.png', '.jpg', '.jpeg')
-    files = [f for f in os.listdir(args.input) if f.lower().endswith(exts)]
-    
-    if not files:
-        print(f"No images found in '{args.input}'.")
-        return
-        
-    print(f"Processing {len(files)} images. Mode: {args.mode}, Tolerance: {args.tolerance}")
-    
-    for f in files:
-        file_path = os.path.join(args.input, f)
-        try:
-            img = Image.open(file_path)
-            
-            if args.mode == "flood":
-                # Auto-detects from corners and floods connected areas
-                result = process_flood_fill(img, args.tolerance)
-            elif args.mode == "auto_color":
-                # Auto-detects from corners and removes globally
-                result = process_auto_color_key(img, args.tolerance)
-            else:
-                # Manual color key
-                # Re-use the logic from auto_color but with manual target
-                # (Need to refactor slightly or just duplicate logic for simplicity here)
-                # Let's just call a helper or do it inline.
-                # Actually process_auto_color_key uses detected color.
-                # Let's make a generic function.
-                
-                # Inline for manual color:
-                img = img.convert("RGBA")
-                datas = img.getdata()
-                new_data = []
-                tr, tg, tb = target_color
-                tol_sq = args.tolerance * args.tolerance * 3
-                for item in datas:
-                    r, g, b = item[0], item[1], item[2]
-                    if ((r - tr)**2 + (g - tg)**2 + (b - tb)**2) <= tol_sq:
-                        new_data.append((255, 255, 255, 0))
-                    else:
-                        new_data.append(item)
-                img.putdata(new_data)
-                result = img
-                
-            output_filename = os.path.splitext(f)[0] + "_processed.png"
-            output_path = os.path.join(args.output, output_filename)
-            result.save(output_path, "PNG")
-            print(f"Saved: {output_path}")
-            
-        except Exception as e:
-            print(f"Failed to process {f}: {e}")
-            
-    print("Done!")
+    process_remover(args.input, args.output, args.mode, args.tolerance, args.color, args.erosion)
 
 if __name__ == "__main__":
     main()
