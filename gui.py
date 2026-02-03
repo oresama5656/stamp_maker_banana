@@ -39,7 +39,7 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         
         # Grid configuration
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(3, weight=1) # Log area expands
+        self.grid_rowconfigure(6, weight=1) # Log area expands
 
         # --- 1. Input & Output Section ---
         self.io_frame = ctk.CTkFrame(self)
@@ -138,9 +138,43 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         self.run_btn = ctk.CTkButton(self, text="処理開始 (RUN)", font=("Arial", 16, "bold"), height=50, command=self.start_process)
         self.run_btn.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
 
+        # --- main/tab 再生成セクション ---
+        self.maintab_frame = ctk.CTkFrame(self)
+        self.maintab_frame.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
+        self.maintab_frame.grid_columnconfigure(1, weight=1)
+        
+        ctk.CTkLabel(self.maintab_frame, text="main/tab 再生成", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        
+        # 選択した画像のパス表示
+        self.selected_img_var = ctk.StringVar(value="画像を選択してください")
+        self.selected_img_label = ctk.CTkLabel(self.maintab_frame, textvariable=self.selected_img_var, anchor="w")
+        self.selected_img_label.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+        
+        # 画像選択ボタン
+        self.select_img_btn = ctk.CTkButton(self.maintab_frame, text="画像選択", width=80, command=self.select_image_for_maintab)
+        self.select_img_btn.grid(row=0, column=2, padx=5, pady=5)
+        
+        # 生成ボタン
+        self.gen_maintab_btn = ctk.CTkButton(self.maintab_frame, text="生成", width=60, command=self.generate_maintab)
+        self.gen_maintab_btn.grid(row=0, column=3, padx=5, pady=5)
+
+        # --- 完成後調整セクション ---
+        self.finish_frame = ctk.CTkFrame(self)
+        self.finish_frame.grid(row=5, column=0, padx=20, pady=10, sticky="ew")
+        
+        ctk.CTkLabel(self.finish_frame, text="完成後調整", font=("Arial", 12, "bold")).pack(side="left", padx=10, pady=5)
+        
+        # 出力フォルダを開くボタン
+        self.open_folder_btn = ctk.CTkButton(self.finish_frame, text="出力フォルダを開く", width=140, command=self.open_output_folder)
+        self.open_folder_btn.pack(side="left", padx=10, pady=5)
+        
+        # ZIP作成ボタン
+        self.create_zip_btn = ctk.CTkButton(self.finish_frame, text="ZIPファイル作成", width=120, command=self.create_zip)
+        self.create_zip_btn.pack(side="left", padx=10, pady=5)
+
         # --- 4. Log Area ---
         self.log_frame = ctk.CTkFrame(self)
-        self.log_frame.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
+        self.log_frame.grid(row=6, column=0, padx=20, pady=10, sticky="nsew")
         
         self.log_text = ctk.CTkTextbox(self.log_frame, state="disabled", font=("Consolas", 10))
         self.log_text.pack(fill="both", expand=True, padx=5, pady=5)
@@ -163,6 +197,132 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         folder = ctk.filedialog.askdirectory()
         if folder:
             self.output_path_var.set(folder)
+
+    def select_image_for_maintab(self):
+        """main/tab生成用の画像をファイルダイアログで選択"""
+        # 出力フォルダをデフォルトの開始位置にする
+        initial_dir = self.output_path_var.get()
+        if not initial_dir or not os.path.exists(initial_dir):
+            initial_dir = os.getcwd()
+        
+        file_path = ctk.filedialog.askopenfilename(
+            title="main/tab生成用の画像を選択",
+            initialdir=initial_dir,
+            filetypes=[("PNG files", "*.png"), ("All files", "*.*")]
+        )
+        if file_path:
+            self.selected_img_var.set(os.path.basename(file_path))
+            self._selected_img_path = file_path  # フルパスを保持
+            print(f"選択: {file_path}")
+    
+    def generate_maintab(self):
+        """選択した画像からmain.pngとtab.pngを生成"""
+        import cv2
+        import numpy as np
+        from line_stamp_formatter import resize_and_pad
+        
+        # 画像が選択されているか確認
+        if not hasattr(self, '_selected_img_path') or not os.path.exists(self._selected_img_path):
+            print("エラー: 画像を選択してください。")
+            return
+        
+        # 出力フォルダを確認
+        output_dir = self.output_path_var.get()
+        if not output_dir or not os.path.exists(output_dir):
+            print("エラー: 出力フォルダが存在しません。")
+            return
+        
+        try:
+            # 画像読み込み
+            img = cv2.imdecode(np.fromfile(self._selected_img_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+            if img is None:
+                print("エラー: 画像を読み込めませんでした。")
+                return
+            
+            # 4チャンネル確認
+            if len(img.shape) == 2:
+                img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGRA)
+            elif img.shape[2] == 3:
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+            
+            # main.png生成 (240x240)
+            main_img = resize_and_pad(img, 240, 240, margin=0)
+            main_path = os.path.join(output_dir, "main.png")
+            cv2.imencode(".png", main_img)[1].tofile(main_path)
+            print(f"生成: {main_path}")
+            
+            # tab.png生成 (96x74)
+            tab_img = resize_and_pad(img, 96, 74, margin=0)
+            tab_path = os.path.join(output_dir, "tab.png")
+            cv2.imencode(".png", tab_img)[1].tofile(tab_path)
+            print(f"生成: {tab_path}")
+            
+            print("main/tab 再生成完了！")
+            
+        except Exception as e:
+            print(f"エラー: {e}")
+
+    def open_output_folder(self):
+        """出力フォルダをエクスプローラで開く"""
+        import subprocess
+        output_dir = self.output_path_var.get()
+        
+        if not output_dir or not os.path.exists(output_dir):
+            print("エラー: 出力フォルダが存在しません。")
+            return
+        
+        # Windowsでエクスプローラを開く
+        subprocess.Popen(['explorer', os.path.abspath(output_dir)])
+        print(f"フォルダを開きました: {os.path.abspath(output_dir)}")
+    
+    def create_zip(self):
+        """出力フォルダをZIPファイルに圧縮（連番リネーム付き）"""
+        import zipfile
+        from datetime import datetime
+        
+        output_dir = self.output_path_var.get()
+        
+        if not output_dir or not os.path.exists(output_dir):
+            print("エラー: 出力フォルダが存在しません。")
+            return
+        
+        # ZIPファイル名を生成（日時付き）
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        zip_filename = f"stamps_{timestamp}.zip"
+        zip_path = os.path.join(os.path.dirname(output_dir), zip_filename)
+        
+        try:
+            # ファイルを取得してソート
+            all_files = [f for f in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, f))]
+            
+            # main.pngとtab.pngを分離
+            special_files = [f for f in all_files if f.lower() in ['main.png', 'tab.png']]
+            stamp_files = [f for f in all_files if f.lower() not in ['main.png', 'tab.png'] and f.lower().endswith('.png')]
+            stamp_files.sort()  # ソート
+            
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                # スタンプ画像を連番リネームして追加
+                for i, file in enumerate(stamp_files, start=1):
+                    file_path = os.path.join(output_dir, file)
+                    new_name = f"{i:02d}.png"  # 01.png, 02.png...
+                    zipf.write(file_path, new_name)
+                
+                # main.pngとtab.pngはそのまま追加
+                for file in special_files:
+                    file_path = os.path.join(output_dir, file)
+                    zipf.write(file_path, file)
+            
+            total_count = len(stamp_files) + len(special_files)
+            print(f"ZIP作成完了: {zip_path}")
+            print(f"スタンプ: {len(stamp_files)}個 (01.png〜{len(stamp_files):02d}.png にリネーム)")
+            print(f"合計: {total_count}個のファイルを圧縮しました。")
+            
+            # ZIPファイルの場所を開く
+            import subprocess
+            subprocess.Popen(['explorer', '/select,', os.path.abspath(zip_path)])
+            
+        except Exception as e:
+            print(f"ZIP作成エラー: {e}")
 
     def start_process(self):
         input_dir = self.input_path_var.get()
@@ -242,6 +402,14 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
                 print(f"\n完了！ 出力先: {os.path.abspath(final_output_dir)}")
             else:
                 print(f"\n処理完了。 最終出力: {os.path.abspath(current_input)}")
+
+            # 一時フォルダを削除
+            temp_folders = ["temp_split", "temp_bg", "temp_trim"]
+            for folder in temp_folders:
+                temp_path = os.path.join(final_output_dir, folder)
+                if os.path.exists(temp_path):
+                    shutil.rmtree(temp_path)
+                    print(f"一時フォルダ削除: {folder}")
 
         except Exception as e:
             print(f"\nエラーが発生しました: {e}")

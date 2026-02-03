@@ -7,15 +7,15 @@ from collections import Counter
 
 def detect_bg_color_cv(img):
     """
-    Detects the background color by analyzing the 4 corners of the image.
+    Detects the background color by analyzing the top-left and top-right corners.
+    左上と右上の2点のみを使用（左下・右下にスタンプ本体が来る場合を考慮）
     Returns the BGR color.
     """
     height, width = img.shape[:2]
+    # 左上と右上のみを使用（スタンプ本体が左下・右下に見切れる場合を考慮）
     corners = [
-        (0, 0),
-        (width - 1, 0),
-        (0, height - 1),
-        (width - 1, height - 1)
+        (0, 0),          # 左上
+        (width - 1, 0),  # 右上
     ]
     
     colors = []
@@ -61,13 +61,9 @@ def process_image_cv(file_path, output_dir, tolerance=30, erosion=1, grid="auto"
         # Simple aspect ratio check
         ratio = width / height
         if 0.8 <= ratio <= 1.2: # Square-ish
-            # Check divisibility to guess 3x3 or 4x4
-            if width % 4 == 0 and width % 3 != 0:
-                rows, cols = 4, 4
-                print(f"Auto-detected 4x4 grid (Square, divisible by 4)")
-            else:
-                rows, cols = 3, 3
-                print(f"Auto-detected 3x3 grid (Square)")
+            # 正方形はデフォルトで3x3（4x4は明示的に--grid 4x4を指定した場合のみ）
+            rows, cols = 3, 3
+            print(f"Auto-detected 3x3 grid (Square)")
         else:
             rows, cols = 2, 4
             print(f"Auto-detected 4x2 grid (Aspect Ratio: {ratio:.2f})")

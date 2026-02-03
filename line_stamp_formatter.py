@@ -6,38 +6,25 @@ import shutil
 
 def resize_and_pad(img, target_w, target_h, margin=0):
     """
-    Resizes image to fit within target dimensions minus margin, maintaining aspect ratio.
-    Then places it on a transparent canvas of target size.
-    Ensures dimensions are even.
+    Resizes image to FIT within target dimensions, maintaining aspect ratio.
+    余白なしでリサイズした画像そのまま出力（Compact方式）。
+    marginは無視される（互換性のため引数は維持）。
     """
     h, w = img.shape[:2]
     
-    # Calculate max allowed size
-    max_w = target_w - (margin * 2)
-    max_h = target_h - (margin * 2)
-    
-    # Scale factor
-    scale = min(max_w / w, max_h / h)
+    # Scale factor - use min to FIT within target (contain mode)
+    scale = min(target_w / w, target_h / h)
     new_w = int(w * scale)
     new_h = int(h * scale)
     
-    # Ensure even dimensions for resized content (optional but good practice)
+    # Ensure even dimensions (LINE stamp requirement)
     if new_w % 2 != 0: new_w -= 1
     if new_h % 2 != 0: new_h -= 1
     
+    # Resize image - no canvas, just resize and return
     resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
     
-    # Create transparent canvas
-    canvas = np.zeros((target_h, target_w, 4), dtype=np.uint8)
-    
-    # Calculate position to center
-    x_offset = (target_w - new_w) // 2
-    y_offset = (target_h - new_h) // 2
-    
-    # Paste resized image onto canvas
-    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
-    
-    return canvas
+    return resized
 
 def process_formatter(input_dir, output_dir):
     if not os.path.exists(output_dir):

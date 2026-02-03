@@ -6,15 +6,15 @@ from collections import Counter
 
 def detect_bg_color_cv(img):
     """
-    Detects background color from 4 corners using OpenCV.
+    Detects background color from top-left and top-right corners using OpenCV.
+    左上と右上の2点のみを使用（左下・右下にスタンプ本体が来る場合を考慮）
     Returns BGR numpy array.
     """
     height, width = img.shape[:2]
+    # 左上と右上のみを使用（スタンプ本体が左下・右下に見切れる場合を考慮）
     corners = [
-        img[0, 0],
-        img[0, width-1],
-        img[height-1, 0],
-        img[height-1, width-1]
+        img[0, 0],         # 左上
+        img[0, width-1],   # 右上
     ]
     
     # Filter out alpha if present (though we usually use BGR for detection)
@@ -92,12 +92,10 @@ def process_remover(input_dir, output_dir, mode="flood", tolerance=30, color="25
                 # Find connected components on the mask
                 num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=4)
                 
-                # Check corners of the labels
+                # Check top corners only (左上・右上のみ。スタンプ本体が左下・右下に見切れる場合を考慮)
                 corner_labels = set()
-                corner_labels.add(labels[0, 0])
-                corner_labels.add(labels[0, w-1])
-                corner_labels.add(labels[h-1, 0])
-                corner_labels.add(labels[h-1, w-1])
+                corner_labels.add(labels[0, 0])     # 左上
+                corner_labels.add(labels[0, w-1])   # 右上
                 
                 # Create new mask only for these labels
                 final_mask = np.zeros_like(mask)
