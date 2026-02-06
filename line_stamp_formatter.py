@@ -26,6 +26,42 @@ def resize_and_pad(img, target_w, target_h, margin=0):
     
     return resized
 
+def resize_exact(img, target_w, target_h):
+    """
+    Resizes image and places it on a canvas with EXACT target dimensions.
+    tab.png用：正確に96x74pxなど指定サイズを保証する。
+    """
+    h, w = img.shape[:2]
+    
+    # Ensure 4 channels (BGRA)
+    if len(img.shape) == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGRA)
+    elif img.shape[2] == 3:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
+    
+    # Scale factor - use min to FIT within target (contain mode)
+    scale = min(target_w / w, target_h / h)
+    new_w = int(w * scale)
+    new_h = int(h * scale)
+    
+    # Ensure dimensions are at least 1
+    new_w = max(1, new_w)
+    new_h = max(1, new_h)
+    
+    # Resize image
+    resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    
+    # Create transparent canvas with exact target dimensions
+    canvas = np.zeros((target_h, target_w, 4), dtype=np.uint8)
+    
+    # Center the resized image on canvas
+    x_offset = (target_w - new_w) // 2
+    y_offset = (target_h - new_h) // 2
+    
+    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+    
+    return canvas
+
 def process_formatter(input_dir, output_dir):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -40,13 +76,9 @@ def process_formatter(input_dir, output_dir):
 
     print(f"Formatting {len(files)} images...")
     
-    # Process regular stamps (max 40)
+    # Process all regular stamps (no limit)
     count = 1
     for f in files:
-        if count > 40:
-            print("Warning: More than 40 images found. Skipping extras.")
-            break
-            
         file_path = os.path.join(input_dir, f)
         try:
             img = cv2.imdecode(np.fromfile(file_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
@@ -77,7 +109,7 @@ def process_formatter(input_dir, output_dir):
                 print(f"Generated: {main_path}")
                 
                 # Tab: 96x74
-                tab_img = resize_and_pad(img, 96, 74, margin=0)
+                tab_img = resize_exact(img, 96, 74)
                 tab_path = os.path.join(output_dir, "tab.png")
                 cv2.imencode(".png", tab_img)[1].tofile(tab_path)
                 print(f"Generated: {tab_path}")
