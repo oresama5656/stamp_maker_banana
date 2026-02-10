@@ -134,6 +134,20 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         
         ctk.CTkLabel(self.options_frame, text="(370x320pxにリサイズ, main/tab画像生成)").grid(row=3, column=1, padx=10, pady=10, sticky="w")
 
+        # Step 5: 出力名メモ（ZIPとバックアップフォルダの名前に付与）
+        ctk.CTkLabel(self.options_frame, text="5. 出力名メモ", font=("Arial", 12, "bold")).grid(row=4, column=0, padx=10, pady=10, sticky="w")
+        
+        self.name_opts = ctk.CTkFrame(self.options_frame, fg_color="transparent")
+        self.name_opts.grid(row=4, column=1, padx=10, pady=10, sticky="w")
+        
+        self.prefix_var = ctk.StringVar(value="")
+        self.prefix_entry = ctk.CTkEntry(self.name_opts, textvariable=self.prefix_var, width=150, placeholder_text="例: 猫キャラ, 犬シリーズ")
+        self.prefix_entry.pack(side="left", padx=5)
+        
+        self.date_var = ctk.BooleanVar(value=True)  # デフォルトON
+        self.date_check = ctk.CTkCheckBox(self.name_opts, text="日付を入れる", variable=self.date_var)
+        self.date_check.pack(side="left", padx=10)
+
         # --- 3. Execution ---
         self.run_btn = ctk.CTkButton(self, text="処理開始 (RUN)", font=("Arial", 16, "bold"), height=50, command=self.start_process)
         self.run_btn.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
@@ -161,38 +175,43 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         # --- 完成後調整セクション ---
         self.finish_frame = ctk.CTkFrame(self)
         self.finish_frame.grid(row=5, column=0, padx=20, pady=10, sticky="ew")
-        self.finish_frame.grid_columnconfigure(1, weight=1)
+        self.finish_frame.grid_columnconfigure(0, weight=1)
         
-        # 行0: ラベルとボタン群
-        ctk.CTkLabel(self.finish_frame, text="完成後調整", font=("Arial", 12, "bold")).grid(row=0, column=0, padx=10, pady=5, sticky="w")
+        # セクションヘッダー
+        ctk.CTkLabel(self.finish_frame, text="🎨 完成後調整", font=("Arial", 13, "bold")).grid(row=0, column=0, padx=10, pady=(8, 4), sticky="w")
         
-        self.finish_btns_frame = ctk.CTkFrame(self.finish_frame, fg_color="transparent")
-        self.finish_btns_frame.grid(row=0, column=1, padx=10, pady=5, sticky="w")
+        # --- 行1: 確認＆リネーム ---
+        self.finish_row1 = ctk.CTkFrame(self.finish_frame, fg_color="transparent")
+        self.finish_row1.grid(row=1, column=0, padx=10, pady=2, sticky="ew")
         
-        # 出力フォルダを開くボタン
-        self.open_folder_btn = ctk.CTkButton(self.finish_btns_frame, text="出力フォルダを開く", width=140, command=self.open_output_folder)
-        self.open_folder_btn.pack(side="left", padx=5, pady=5)
+        self.open_folder_btn = ctk.CTkButton(self.finish_row1, text="📂 出力フォルダを開く", width=160, command=self.open_output_folder)
+        self.open_folder_btn.pack(side="left", padx=(0, 8), pady=4)
         
-        # ZIP作成ボタン
-        self.create_zip_btn = ctk.CTkButton(self.finish_btns_frame, text="ZIPファイル作成", width=120, command=self.create_zip)
-        self.create_zip_btn.pack(side="left", padx=5, pady=5)
+        self.rename_btn = ctk.CTkButton(self.finish_row1, text="🔢 リネーム", width=100, command=self.rename_files, fg_color="#2E7D32", hover_color="#388E3C")
+        self.rename_btn.pack(side="left", padx=4, pady=4)
         
-        # ウォーターマーク削除ボタン (9の倍数)
-        self.delete_watermark_btn = ctk.CTkButton(self.finish_btns_frame, text="🍌💣", width=60, command=self.delete_watermark_files)
-        self.delete_watermark_btn.pack(side="left", padx=5, pady=5)
+        # ファイル数カウント表示エリア
+        self.count_area = ctk.CTkFrame(self.finish_row1, fg_color=("gray85", "gray20"), corner_radius=8)
+        self.count_area.pack(side="left", padx=8, pady=4)
         
-        # 行1: プレフィックスと日付オプション
-        self.zip_opts_frame = ctk.CTkFrame(self.finish_frame, fg_color="transparent")
-        self.zip_opts_frame.grid(row=1, column=0, columnspan=2, padx=10, pady=5, sticky="w")
+        self.file_count_label = ctk.CTkLabel(self.count_area, text="📁 --個", font=("Arial", 13, "bold"), width=80)
+        self.file_count_label.pack(side="left", padx=(10, 4), pady=4)
         
-        ctk.CTkLabel(self.zip_opts_frame, text="プレフィックス:").pack(side="left", padx=5)
-        self.prefix_var = ctk.StringVar(value="")
-        self.prefix_entry = ctk.CTkEntry(self.zip_opts_frame, textvariable=self.prefix_var, width=120, placeholder_text="例: cat, dog")
-        self.prefix_entry.pack(side="left", padx=5)
+        self.refresh_count_btn = ctk.CTkButton(self.count_area, text="🔄", width=32, height=28, command=self.update_file_count, fg_color="transparent", hover_color=("gray75", "gray30"), text_color=("gray20", "gray90"))
+        self.refresh_count_btn.pack(side="left", padx=(0, 6), pady=4)
         
-        self.date_var = ctk.BooleanVar(value=True)  # デフォルトON
-        self.date_check = ctk.CTkCheckBox(self.zip_opts_frame, text="ファイル名に日付を入れる", variable=self.date_var)
-        self.date_check.pack(side="left", padx=15)
+        # --- 行2: 出力＆クリーンアップ ---
+        self.finish_row2 = ctk.CTkFrame(self.finish_frame, fg_color="transparent")
+        self.finish_row2.grid(row=2, column=0, padx=10, pady=(2, 8), sticky="ew")
+        
+        self.create_zip_btn = ctk.CTkButton(self.finish_row2, text="📦 ZIPファイル作成", width=160, command=self.create_zip)
+        self.create_zip_btn.pack(side="left", padx=(0, 8), pady=4)
+        
+        self.delete_watermark_btn = ctk.CTkButton(self.finish_row2, text="🍌💣", width=60, command=self.delete_watermark_files)
+        self.delete_watermark_btn.pack(side="left", padx=4, pady=4)
+        
+        self.delete_input_btn = ctk.CTkButton(self.finish_row2, text="🗑️ 入力画像クリア", width=140, command=self.delete_input_images, fg_color="#8B0000", hover_color="#B22222")
+        self.delete_input_btn.pack(side="left", padx=4, pady=4)
 
         # --- 4. Log Area ---
         self.log_frame = ctk.CTkFrame(self)
@@ -296,6 +315,58 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         # Windowsでエクスプローラを開く
         subprocess.Popen(['explorer', os.path.abspath(output_dir)])
         print(f"フォルダを開きました: {os.path.abspath(output_dir)}")
+        self.update_file_count()
+    
+    def rename_files(self):
+        """出力フォルダ内のスタンプ画像を連番リネームし、個数を表示"""
+        output_dir = self.output_path_var.get()
+        
+        if not output_dir or not os.path.exists(output_dir):
+            print("エラー: 出力フォルダが存在しません。")
+            return
+        
+        # スタンプ画像を取得（main.png, tab.png除く）
+        all_files = [f for f in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, f))]
+        stamp_files = [f for f in all_files if f.lower() not in ['main.png', 'tab.png'] and f.lower().endswith('.png')]
+        stamp_files.sort()
+        
+        if not stamp_files:
+            print("リネーム対象のスタンプ画像がありません。")
+            self.update_file_count()
+            return
+        
+        # 一時名にリネーム（衝突回避）
+        temp_names = []
+        for i, file in enumerate(stamp_files):
+            src = os.path.join(output_dir, file)
+            temp_name = f"__temp_rename_{i:04d}.png"
+            dst = os.path.join(output_dir, temp_name)
+            os.rename(src, dst)
+            temp_names.append(temp_name)
+        
+        # 連番にリネーム
+        for i, temp_name in enumerate(temp_names, start=1):
+            src = os.path.join(output_dir, temp_name)
+            new_name = f"{i:02d}.png"
+            dst = os.path.join(output_dir, new_name)
+            os.rename(src, dst)
+        
+        count = len(temp_names)
+        print(f"リネーム完了: {count}個 (01.png〜{count:02d}.png)")
+        self.update_file_count()
+    
+    def update_file_count(self):
+        """出力フォルダ内のスタンプ用PNG個数をカウントしてラベルを更新"""
+        output_dir = self.output_path_var.get()
+        
+        if not output_dir or not os.path.exists(output_dir):
+            self.file_count_label.configure(text="📁 --個")
+            return
+        
+        all_files = [f for f in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, f))]
+        stamp_count = len([f for f in all_files if f.lower() not in ['main.png', 'tab.png'] and f.lower().endswith('.png')])
+        
+        self.file_count_label.configure(text=f"📁 {stamp_count}個")
     
     def create_zip(self):
         """出力フォルダをZIPファイルに圧縮（連番リネーム付き）+ フォルダも同時出力"""
@@ -322,8 +393,7 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         
         base_name = "_".join(name_parts) if name_parts else ""
         
-        # 連番を計算 (既存ファイル/フォルダをチェック)
-        parent_dir = os.path.dirname(output_dir)
+        # 連番を計算 (既存ZIPをチェック)
         set_num = 1
         
         while True:
@@ -332,15 +402,14 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
             else:
                 full_name = f"Set{set_num:02d}"
             
-            zip_path = os.path.join(parent_dir, f"{full_name}.zip")
-            folder_path = os.path.join(parent_dir, full_name)
+            zip_path = os.path.join(output_dir, f"{full_name}.zip")
             
-            if not os.path.exists(zip_path) and not os.path.exists(folder_path):
+            if not os.path.exists(zip_path):
                 break
             set_num += 1
         
         try:
-            # ファイルを取得してソート
+            # ファイルを取得してソート（フォルダは除外）
             all_files = [f for f in os.listdir(output_dir) if os.path.isfile(os.path.join(output_dir, f))]
             
             # main.pngとtab.pngを分離
@@ -348,34 +417,39 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
             stamp_files = [f for f in all_files if f.lower() not in ['main.png', 'tab.png'] and f.lower().endswith('.png')]
             stamp_files.sort()  # ソート
             
-            # フォルダ作成
-            os.makedirs(folder_path, exist_ok=True)
+            if not stamp_files and not special_files:
+                print("エラー: 出力フォルダにPNG画像がありません。")
+                return
             
-            # スタンプ画像を連番リネームしてフォルダにコピー
-            for i, file in enumerate(stamp_files, start=1):
-                src_path = os.path.join(output_dir, file)
-                new_name = f"{i:02d}.png"  # 01.png, 02.png...
-                dst_path = os.path.join(folder_path, new_name)
-                shutil.copy2(src_path, dst_path)
-            
-            # main.pngとtab.pngはそのままコピー
-            for file in special_files:
-                src_path = os.path.join(output_dir, file)
-                dst_path = os.path.join(folder_path, file)
-                shutil.copy2(src_path, dst_path)
-            
-            # ZIPファイル作成（フォルダの中身を圧縮）
+            # ZIPファイル作成（直接連番リネームして追加）
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                for file in os.listdir(folder_path):
-                    file_path = os.path.join(folder_path, file)
+                # スタンプ画像を連番リネームして追加
+                for i, file in enumerate(stamp_files, start=1):
+                    file_path = os.path.join(output_dir, file)
+                    new_name = f"{i:02d}.png"  # 01.png, 02.png...
+                    zipf.write(file_path, new_name)
+                
+                # main.pngとtab.pngはそのまま追加
+                for file in special_files:
+                    file_path = os.path.join(output_dir, file)
                     zipf.write(file_path, file)
             
             total_count = len(stamp_files) + len(special_files)
             print(f"\n出力完了!")
-            print(f"  ZIP: {zip_path}")
-            print(f"  フォルダ: {folder_path}")
+            print(f"  ZIP: {os.path.basename(zip_path)}")
             print(f"  スタンプ: {len(stamp_files)}個 (01.png〜{len(stamp_files):02d}.png にリネーム)")
             print(f"  合計: {total_count}個のファイル")
+            
+            # ルートのPNG画像を削除（バックアップフォルダは残す）
+            deleted_count = 0
+            for file in all_files:
+                if file.lower().endswith('.png'):
+                    file_path = os.path.join(output_dir, file)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                        deleted_count += 1
+            
+            print(f"  クリーンアップ: {deleted_count}個のルート画像を削除")
             
             # ZIPファイルの場所を開く
             import subprocess
@@ -411,6 +485,36 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
             print(f"合計 {len(deleted_files)} 個のウォーターマーク画像を削除しました。")
         else:
             print("削除対象のウォーターマーク画像が見つかりませんでした。")
+
+    def delete_input_images(self):
+        """入力フォルダの画像ファイルのみを削除（サブフォルダやその他のファイルは残す）"""
+        input_dir = self.input_path_var.get()
+        
+        if not input_dir or not os.path.exists(input_dir):
+            print("エラー: 入力フォルダが存在しません。")
+            return
+        
+        # 画像拡張子のリスト
+        image_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'}
+        
+        deleted_files = []
+        
+        for file in os.listdir(input_dir):
+            file_path = os.path.join(input_dir, file)
+            # ファイルのみ（フォルダは除外）、かつ画像ファイルの場合
+            if os.path.isfile(file_path):
+                ext = os.path.splitext(file)[1].lower()
+                if ext in image_extensions:
+                    try:
+                        os.remove(file_path)
+                        deleted_files.append(file)
+                    except Exception as e:
+                        print(f"削除エラー ({file}): {e}")
+        
+        if deleted_files:
+            print(f"入力画像クリア完了: {len(deleted_files)} 個の画像を削除しました。")
+        else:
+            print("削除対象の画像が見つかりませんでした。")
 
     def start_process(self):
         input_dir = self.input_path_var.get()
@@ -498,6 +602,43 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
                 if os.path.exists(temp_path):
                     shutil.rmtree(temp_path)
                     print(f"一時フォルダ削除: {folder}")
+            
+            # バックアップフォルダを作成（全画像をコピー）
+            prefix = self.prefix_var.get().strip()
+            include_date = self.date_var.get()
+            
+            # バックアップフォルダ名を生成
+            backup_parts = []
+            if prefix:
+                backup_parts.append(prefix)
+            if include_date:
+                backup_parts.append(datetime.now().strftime("%Y%m%d"))
+            backup_parts.append("raw")
+            
+            backup_name = "_".join(backup_parts)
+            backup_path = os.path.join(final_output_dir, backup_name)
+            
+            # 既存のバックアップフォルダがあれば連番を付ける
+            if os.path.exists(backup_path):
+                i = 2
+                while os.path.exists(f"{backup_path}_{i}"):
+                    i += 1
+                backup_path = f"{backup_path}_{i}"
+                backup_name = os.path.basename(backup_path)
+            
+            os.makedirs(backup_path, exist_ok=True)
+            
+            # 出力フォルダのPNG画像をバックアップにコピー
+            copied_count = 0
+            for file in os.listdir(final_output_dir):
+                if file.lower().endswith('.png'):
+                    src = os.path.join(final_output_dir, file)
+                    dst = os.path.join(backup_path, file)
+                    if os.path.isfile(src):
+                        shutil.copy2(src, dst)
+                        copied_count += 1
+            
+            print(f"\nバックアップ作成: {backup_name}/ ({copied_count}個の画像)")
 
         except Exception as e:
             print(f"\nエラーが発生しました: {e}")
