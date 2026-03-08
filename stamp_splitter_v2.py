@@ -29,7 +29,7 @@ def detect_bg_color_cv(img):
     most_common = Counter(colors).most_common(1)[0][0]
     return np.array(most_common, dtype=np.uint8)
 
-def process_image_cv(file_path, output_dir, tolerance=30, erosion=1, grid="auto", remove_bg=True):
+def process_image_cv(file_path, output_dir, tolerance=30, erosion=1, grid="auto", remove_bg=True, inner_margin=0):
     """
     Splits a stamp sheet.
     remove_bg: If True, applies high-quality transparency using OpenCV.
@@ -100,6 +100,14 @@ def process_image_cv(file_path, output_dir, tolerance=30, erosion=1, grid="auto"
             # Crop
             crop = img[top:bottom, left:right]
             
+            # Apply cell margin trim if specified
+            if inner_margin > 0:
+                ch, cw = crop.shape[:2]
+                if inner_margin * 2 < ch and inner_margin * 2 < cw:
+                    crop = crop[inner_margin:ch-inner_margin, inner_margin:cw-inner_margin]
+                else:
+                    print(f"Warning: Inner margin {inner_margin}px is too large for cell size {cw}x{ch}.")
+            
             final_crop = crop
             
             if remove_bg:
@@ -133,7 +141,7 @@ def process_image_cv(file_path, output_dir, tolerance=30, erosion=1, grid="auto"
             
             count += 1
 
-def process_splitter(input_dir, output_dir, tolerance=50, erosion=1, grid="auto", remove_bg=True):
+def process_splitter(input_dir, output_dir, tolerance=50, erosion=1, grid="auto", remove_bg=True, inner_margin=0):
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -149,7 +157,7 @@ def process_splitter(input_dir, output_dir, tolerance=50, erosion=1, grid="auto"
     
     for f in files:
         file_path = os.path.join(input_dir, f)
-        process_image_cv(file_path, output_dir, tolerance, erosion, grid, remove_bg)
+        process_image_cv(file_path, output_dir, tolerance, erosion, grid, remove_bg, inner_margin)
         
     print("Done!")
 

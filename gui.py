@@ -92,6 +92,12 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         self.grid_combo = ctk.CTkComboBox(self.split_opts, values=["auto", "4x2", "3x3", "4x4"], variable=self.grid_var, width=80)
         self.grid_combo.pack(side="left", padx=5)
 
+        ctk.CTkLabel(self.split_opts, text="内側フチ除去:").pack(side="left", padx=(15, 5))
+        self.split_margin_var = ctk.StringVar(value="0")
+        self.split_margin_entry = ctk.CTkEntry(self.split_opts, textvariable=self.split_margin_var, width=40)
+        self.split_margin_entry.pack(side="left", padx=5)
+        ctk.CTkLabel(self.split_opts, text="px").pack(side="left")
+
         # Step 2: BG Remove
         self.check_bg_var = ctk.BooleanVar(value=False)
         self.check_bg = ctk.CTkCheckBox(self.options_frame, text="2. 背景透過 (単体処理)", variable=self.check_bg_var, font=("Arial", 12, "bold"))
@@ -561,6 +567,11 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
                 output_split = os.path.join(final_output_dir, "temp_split")
                 if os.path.exists(output_split): shutil.rmtree(output_split)
                 
+                try:
+                    inner_margin = int(self.split_margin_var.get())
+                except ValueError:
+                    inner_margin = 0
+                
                 print("\n[Step 1] スタンプ画像を分割中...")
                 # Splitter defaults: tolerance=50, erosion=1 (hidden from UI)
                 # remove_bg=False because we have a separate BG removal step
@@ -570,7 +581,8 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
                     tolerance=50, 
                     erosion=1, 
                     grid=self.grid_var.get(),
-                    remove_bg=False
+                    remove_bg=False,
+                    inner_margin=inner_margin
                 )
                 current_input = output_split
 
