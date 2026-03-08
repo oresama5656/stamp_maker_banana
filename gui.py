@@ -65,7 +65,14 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         self.output_entry.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
         
         self.browse_out_btn = ctk.CTkButton(self.io_frame, text="参照", width=80, command=self.browse_output)
-        self.browse_out_btn.grid(row=1, column=2, padx=10, pady=5)
+        self.browse_out_btn.grid(row=1, column=2, padx=(10, 5), pady=5)
+        
+        self.workbench_btn = ctk.CTkButton(
+            self.io_frame, text="🛠️", width=40, font=("Arial", 16),
+            fg_color="#CC7722", hover_color="#A65E16",  # A tool-like color
+            command=self.set_workbench_output
+        )
+        self.workbench_btn.grid(row=1, column=3, padx=(0, 10), pady=5)
 
         # --- 2. Pipeline Options ---
         self.options_frame = ctk.CTkFrame(self)
@@ -141,7 +148,7 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         self.name_opts.grid(row=4, column=1, padx=10, pady=10, sticky="w")
         
         self.prefix_var = ctk.StringVar(value="")
-        self.prefix_entry = ctk.CTkEntry(self.name_opts, textvariable=self.prefix_var, width=150, placeholder_text="例: 猫キャラ, 犬シリーズ")
+        self.prefix_entry = ctk.CTkEntry(self.name_opts, textvariable=self.prefix_var, width=180, placeholder_text="空欄時は入力フォルダ名を適用")
         self.prefix_entry.pack(side="left", padx=5)
         
         self.date_var = ctk.BooleanVar(value=True)  # デフォルトON
@@ -238,6 +245,11 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         folder = ctk.filedialog.askdirectory()
         if folder:
             self.output_path_var.set(folder)
+
+    def set_workbench_output(self):
+        """作業台フォルダ（相対パス）を一発で設定する"""
+        workbench_path = os.path.join("..", "sticker-porter", "00_WorkBench")
+        self.output_path_var.set(workbench_path)
 
     def select_image_for_maintab(self):
         """main/tab生成用の画像をファイルダイアログで選択"""
@@ -382,6 +394,10 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
         
         # 基本名を生成
         prefix = self.prefix_var.get().strip()
+        if not prefix:
+            input_dir = self.input_path_var.get().strip()
+            if input_dir:
+                prefix = os.path.basename(os.path.normpath(input_dir))
         include_date = self.date_var.get()
         
         # 基本パーツを組み立て
@@ -605,6 +621,10 @@ class StampMakerGUI(ctk.CTk, TkinterDnD.DnDWrapper):
             
             # バックアップフォルダを作成（全画像をコピー）
             prefix = self.prefix_var.get().strip()
+            if not prefix:
+                input_dir = self.input_path_var.get().strip()
+                if input_dir:
+                    prefix = os.path.basename(os.path.normpath(input_dir))
             include_date = self.date_var.get()
             
             # バックアップフォルダ名を生成
