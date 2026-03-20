@@ -4,27 +4,39 @@ import os
 import argparse
 import shutil
 
-def resize_and_pad(img, target_w, target_h, margin=0):
+def resize_and_pad(img, target_w, target_h, margin=10):
     """
-    Resizes image to FIT within target dimensions, maintaining aspect ratio.
-    余白なしでリサイズした画像そのまま出力（Compact方式）。
-    marginは無視される（互換性のため引数は維持）。
+    Resizes image to FIT within target dimensions (minus margin),
+    and centers it on an EXACT target_w x target_h transparent canvas.
     """
     h, w = img.shape[:2]
     
-    # Scale factor - use min to FIT within target (contain mode)
-    scale = min(target_w / w, target_h / h)
+    # Effective target size after margin
+    eff_w = target_w - (margin * 2)
+    eff_h = target_h - (margin * 2)
+    
+    # Scale factor - use min to FIT within effective target (contain mode)
+    scale = min(eff_w / w, eff_h / h)
     new_w = int(w * scale)
     new_h = int(h * scale)
     
-    # Ensure even dimensions (LINE stamp requirement)
-    if new_w % 2 != 0: new_w -= 1
-    if new_h % 2 != 0: new_h -= 1
+    # Ensure dimensions are at least 1 and even (LINE stamp requirement)
+    new_w = max(2, (new_w // 2) * 2)
+    new_h = max(2, (new_h // 2) * 2)
     
-    # Resize image - no canvas, just resize and return
+    # Resize image
     resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
     
-    return resized
+    # Create transparent canvas with exact target dimensions
+    canvas = np.zeros((target_h, target_w, 4), dtype=np.uint8)
+    
+    # Center the resized image on canvas
+    x_offset = (target_w - new_w) // 2
+    y_offset = (target_h - new_h) // 2
+    
+    canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
+    
+    return canvas
 
 def resize_exact(img, target_w, target_h):
     """

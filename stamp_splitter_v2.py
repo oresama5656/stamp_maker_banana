@@ -33,6 +33,7 @@ def process_image_cv(file_path, output_dir, tolerance=30, erosion=1, grid="auto"
     """
     Splits a stamp sheet.
     remove_bg: If True, applies high-quality transparency using OpenCV.
+    inner_margin: int (all sides) or list/tuple [top, bottom, left, right]
     """
     try:
         img = cv2.imdecode(np.fromfile(file_path, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
@@ -101,12 +102,18 @@ def process_image_cv(file_path, output_dir, tolerance=30, erosion=1, grid="auto"
             crop = img[top:bottom, left:right]
             
             # Apply cell margin trim if specified
-            if inner_margin > 0:
+            if inner_margin:
                 ch, cw = crop.shape[:2]
-                if inner_margin * 2 < ch and inner_margin * 2 < cw:
-                    crop = crop[inner_margin:ch-inner_margin, inner_margin:cw-inner_margin]
+                if isinstance(inner_margin, (list, tuple)):
+                    m_top, m_bottom, m_left, m_right = inner_margin
                 else:
-                    print(f"Warning: Inner margin {inner_margin}px is too large for cell size {cw}x{ch}.")
+                    m_top = m_bottom = m_left = m_right = int(inner_margin)
+
+                if (m_top + m_bottom) < ch and (m_left + m_right) < cw:
+                    # [startY:endY, startX:endX]
+                    crop = crop[m_top:ch-m_bottom, m_left:cw-m_right]
+                else:
+                    print(f"Warning: Inner margin {inner_margin} is too large for cell size {cw}x{ch}.")
             
             final_crop = crop
             
